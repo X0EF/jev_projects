@@ -1,0 +1,8 @@
+.env
+.env.local
+.vercel
+.cursor/
+__pycache__/
+*.pyc
+_generate.py
+_deploy.py

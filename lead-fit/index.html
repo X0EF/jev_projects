@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lead Fit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="kicker">ICP scoring</div>
+      <h1>Lead Fit</h1>
+      <p class="blurb">Paste a company or LinkedIn blob. Jev scores fit against the ICP you typed.</p>
+      <nav class="nav"><a href="/">Index</a> <a href="/triage-desk/">Triage Desk</a> <a href="/lead-fit/">Lead Fit</a> <a href="/listing-cop/">Listing Cop</a> <a href="/cite-check/">Cite Check</a> <a href="/prompt-guard/">Prompt Guard</a> <a href="/skill-pick/">Skill Pick</a> <a href="/resume-match/">Resume Match</a> <a href="/clause-finder/">Clause Finder</a></nav>
+    </header>
+    <div class="grid">
+      <form id="form" class="panel" data-render="renderLead">
+        <label for="profile">Company / profile</label>
+<textarea id="profile" name="profile" required>Acme Robotics, Series A, 40 people, San Francisco. VP Sales posting about outbound. Sells warehouse robots to mid-market manufacturers.</textarea>
+<label for="icp">Ideal customer profile</label>
+<textarea id="icp" name="icp" required>B2B SaaS, Series A–B, US or UK, a buyer in sales or ops, 20–200 employees.</textarea>
+        <button id="go" type="submit">Score lead</button>
+        <p class="err" id="err"></p>
+      </form>
+      <div class="panel" id="out">
+        <p class="meta">Result lands here. Jev returns labels and probabilities, not essays.</p>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

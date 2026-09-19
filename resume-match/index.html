@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resume Match</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="kicker">Hiring screen</div>
+      <h1>Resume Match</h1>
+      <p class="blurb">Paste a job and a resume. Jev scores evidence, not charisma.</p>
+      <nav class="nav"><a href="/">Index</a> <a href="/triage-desk/">Triage Desk</a> <a href="/lead-fit/">Lead Fit</a> <a href="/listing-cop/">Listing Cop</a> <a href="/cite-check/">Cite Check</a> <a href="/prompt-guard/">Prompt Guard</a> <a href="/skill-pick/">Skill Pick</a> <a href="/resume-match/">Resume Match</a> <a href="/clause-finder/">Clause Finder</a></nav>
+    </header>
+    <div class="grid">
+      <form id="form" class="panel" data-render="renderResume">
+        <label for="job">Job bullets</label>
+<textarea id="job" name="job" required>Need 5 years Python, shipped backend APIs, led a small team, insurance or fintech domain a plus.</textarea>
+<label for="resume">Resume</label>
+<textarea id="resume" name="resume" required>Backend engineer, 6 years. Python/Django payments APIs. Managed two juniors. Most recently e-commerce, not insurance.</textarea>
+        <button id="go" type="submit">Match</button>
+        <p class="err" id="err"></p>
+      </form>
+      <div class="panel" id="out">
+        <p class="meta">Result lands here. Jev returns labels and probabilities, not essays.</p>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
