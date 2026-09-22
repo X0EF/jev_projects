@@ -165,6 +165,70 @@ async function typesafe(key, state, questions) {
   return { ok: r.ok, status: r.status, json };
 }
 
+function parseRules(raw) {
+  const lines = String(raw || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  const used = new Set();
+  const rules = [];
+  for (const line of lines) {
+    const split = line.match(/^(.{1,60}?)\s*[:|]\s+(.+)$/);
+    let label;
+    let detail;
+    if (split) {
+      label = split[1].replace(/^[-*\d.)\s]+/, "").trim();
+      detail = split[2].trim();
+    } else {
+      label = line.replace(/^[-*\d.)\s]+/, "").trim();
+      detail = label;
+    }
+    if (!label) continue;
+    let id = label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 32);
+    if (!id || !/^[a-z]/.test(id)) id = "rule_" + (rules.length + 1);
+    let unique = id;
+    let n = 2;
+    while (used.has(unique)) unique = id.slice(0, 28) + "_" + n++;
+    used.add(unique);
+    rules.push({ id: unique, label, detail: detail.slice(0, 240) });
+  }
+  if (!rules.length) return null;
+  if (!rules.some((r) => r.id === "none")) {
+    rules.push({
+      id: "none",
+      label: "None",
+      detail: "The post does not violate a listed rule",
+    });
+  }
+  return rules;
+}
+
+async function ruleCheck(key, state) {
+  const rules = parseRules(state.rules);
+  if (!rules) return { error: "Add at least one rule, one per line", status: 400 };
+  const post = String(state.post || "").trim();
+  const image = String(state.image || "").trim();
+  if (!post && !image) return { error: "Add a post or describe the image", status: 400 };
+  const criteria = Object.fromEntries(rules.map((r) => [r.id, r.detail]));
+  const questions = {
+    rule: {
+      type: "choice",
+      instructions:
+        "Which Discord rule does this post violate? Categories are in `rules`. Read `post` and `image` together. `image` is a description of an attached picture. Choose none when no listed rule is broken.",
+      criteria,
+    },
+  };
+  const { ok, status, json } = await typesafe(key, { rules, post, image }, questions);
+  if (!ok) return { error: json.message || json.error || "TypeSafe error", detail: json, status };
+  json.rules = rules;
+  return { json, status: 200 };
+}
+
 async function clauseFinder(key, state) {
   const raw = String(state.document || "");
   const query = String(state.query || "");
@@ -205,6 +269,11 @@ module.exports = async function handler(req, res) {
   const site = body.site;
   const state = body.state;
   if (!state || !site) return res.status(400).json({ error: "Missing site or state" });
+  if (site === "rule-check") {
+    const out = await ruleCheck(key, state);
+    if (out.error) return res.status(out.status || 500).json({ error: out.error, detail: out.detail });
+    return res.status(200).json(out.json);
+  }
   if (site === "clause-finder") {
     const out = await clauseFinder(key, state);
     if (out.error) return res.status(out.status || 500).json({ error: out.error, detail: out.detail });
