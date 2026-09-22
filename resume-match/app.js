@@ -25,7 +25,7 @@ function renderTriage(a) {
   return `<p class="stamp">${a.department.choice}</p>
     ${score("Urgency", a.urgency)}
     ${noul("Refund asked", a.refund_asked.noul)}
-    <p class="meta">department confidence ${Number(a.department.confidence).toFixed(2)} · next: ${
+    <p class="meta">department confidence ${Number(a.department.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""} · next: ${
       a.refund_asked.noul > 0.8 && a.department.choice === "billing" ? "auto-refund if policy allows" : "human queue"
     }</p>`;
 }
@@ -34,7 +34,8 @@ function renderLead(a) {
   return `${score("Overall fit", a.overall)}
     ${noul("Industry", a.industry_fit.noul)}
     ${noul("Stage", a.stage_fit.noul)}
-    ${noul("Buyer", a.buyer_fit.noul)}`;
+    ${noul("Buyer", a.buyer_fit.noul)}
+    <p class="meta">confidence ${Number(a.overall.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderListing(a) {
@@ -43,12 +44,12 @@ function renderListing(a) {
     ${noul("Prohibited", a.prohibited.noul)}
     ${noul("Counterfeit", a.counterfeit.noul)}
     ${noul("Spam", a.spam.noul)}
-    <p class="meta">confidence ${Number(a.decision.confidence).toFixed(2)}</p>`;
+    <p class="meta">confidence ${Number(a.decision.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderCite(a) {
   return `<p class="stamp">${a.support.choice}</p>
-    <p class="meta">confidence ${Number(a.support.confidence).toFixed(2)} · ${
+    <p class="meta">confidence ${Number(a.support.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""} · ${
       Number(a.support.confidence) < 0.45 ? "send to review" : "act"
     }</p>
     <pre>${JSON.stringify(a.support.probabilities, null, 2)}</pre>`;
@@ -60,21 +61,23 @@ function renderGuard(a) {
     ${noul("Jailbreak", a.jailbreak.noul)}
     ${noul("Injection", a.injection.noul)}
     ${noul("PII", a.pii.noul)}
-    ${score("Harm if complied", a.harm)}`;
+    ${score("Harm if complied", a.harm)}
+    <p class="meta">confidence ${Number(a.harm.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderSkill(a) {
   const pick = a.needs_skill.noul < 0.4 ? "none" : a.skill.choice;
   return `<p class="stamp">${pick}</p>
     ${noul("Needs a skill", a.needs_skill.noul)}
-    <p class="meta">raw choice ${a.skill.choice} · confidence ${Number(a.skill.confidence).toFixed(2)}</p>`;
+    <p class="meta">raw choice ${a.skill.choice} · confidence ${Number(a.skill.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderResume(a) {
   return `<p class="stamp">${a.next_step.choice}</p>
     ${score("Required skills", a.required_skills)}
     ${score("Leadership", a.leadership)}
-    ${score("Domain", a.domain)}`;
+    ${score("Domain", a.domain)}
+    <p class="meta">confidence ${Number(a.next_step.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderClause(payload) {
@@ -88,12 +91,26 @@ function renderClause(payload) {
   return `${noul("Document answers the question", a.answered.noul)}
     <p class="stamp">line ${id}</p>
     <pre>${html}</pre>
-    <p class="meta">Jev selected an id. Text is copied, not rewritten.</p>`;
+    <p class="meta">confidence ${Number(a.line.confidence).toFixed(2)}${resources(payload) ? " · " + resources(payload) : ""} · Jev selected an id. Text is copied, not rewritten.</p>`;
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+
+function resources(source) {
+  const usage = (source && source.usage) || {};
+  const inputTokens = Number(usage.input_tokens);
+  const outputTokens = Number(usage.output_tokens);
+  const cost = (Number.isFinite(inputTokens) ? inputTokens : 0) / 1e6 * 0.042;
+  return [
+    Number.isFinite(inputTokens) ? inputTokens.toLocaleString() + " in" : "",
+    Number.isFinite(outputTokens) ? outputTokens.toLocaleString() + " out" : "",
+    Number.isFinite(inputTokens) ? "$" + (cost < 0.01 ? cost.toFixed(6) : cost.toFixed(4)) : "",
+    source && source.model ? escapeHtml(source.model) : "",
+  ].filter(Boolean).join(" · ");
+}
+
 
 const renders = { renderTriage, renderLead, renderListing, renderCite, renderGuard, renderSkill, renderResume, renderClause };
 
@@ -426,7 +443,12 @@ form.addEventListener("submit", async (e) => {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || res.statusText);
     const fn = renders[form.dataset.render];
-    out.innerHTML = fn(json.lines ? json : json.answers);
+    const payload = json.lines || json.rules ? json : json.answers;
+    if (payload && json.usage && !payload.usage) {
+      payload.usage = json.usage;
+      payload.model = json.model;
+    }
+    out.innerHTML = fn(payload);
   } catch (ex) {
     out.innerHTML = "";
     err.textContent = ex.message || String(ex);

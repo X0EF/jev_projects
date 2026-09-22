@@ -94,6 +94,27 @@ function renderClause(payload) {
     <p class="meta">confidence ${Number(a.line.confidence).toFixed(2)}${resources(payload) ? " · " + resources(payload) : ""} · Jev selected an id. Text is copied, not rewritten.</p>`;
 }
 
+function renderTerms(payload) {
+  const a = payload.answers;
+  const lines = payload.lines || [];
+  const id = a.line && a.line.choice;
+  const violates = Number(a.violates.noul);
+  const html = lines.map((ln) => {
+    const mark = String(ln.id) === String(id) ? "hl" : "";
+    return `<div class="${mark}">${ln.id}. ${escapeHtml(ln.text)}</div>`;
+  }).join("");
+  const choiceCall = payload.calls && payload.calls.choice;
+  const noulCall = payload.calls && payload.calls.noul;
+  const choiceMeta = resources(choiceCall);
+  const noulMeta = resources(noulCall);
+  return `<p class="stamp">${violates >= 0.5 ? "Violates" : "Allowed"}</p>
+    ${noul("Violates this clause", violates)}
+    <p class="stamp">line ${id}</p>
+    <pre>${html}</pre>
+    <p class="meta">clause confidence ${Number(a.line.confidence).toFixed(2)}${choiceMeta ? " · " + choiceMeta : ""}</p>
+    <p class="meta">noul ${violates.toFixed(2)}${noulMeta ? " · " + noulMeta : ""}</p>`;
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -112,7 +133,7 @@ function resources(source) {
 }
 
 
-const renders = { renderTriage, renderLead, renderListing, renderCite, renderGuard, renderSkill, renderResume, renderClause };
+const renders = { renderTriage, renderLead, renderListing, renderCite, renderGuard, renderSkill, renderResume, renderClause, renderTerms };
 
 const SAMPLE_MS = 4000;
 
@@ -349,6 +370,32 @@ const SAMPLES = {
     {
       job: "Head of sales at a 30-person software company. Must have led a team and closed yearly contracts.",
       resume: "Individual sales rep. Hit quota twice. Never managed people. Mostly month-to-month deals.",
+    },
+  ],
+  "terms-gate": [
+    {
+      document: "1. You may cancel anytime.\n2. Fees are billed monthly in advance.\n3. Refunds are not offered after the billing date.",
+      action: "I want to cancel in the middle of the month and get the rest of the month refunded.",
+    },
+    {
+      document: "1. You may cancel anytime.\n2. Fees are billed monthly in advance.\n3. Refunds are not offered after the billing date.",
+      action: "I want to cancel before the next billing date.",
+    },
+    {
+      document: "1. Pets need written approval.\n2. Quiet hours start at 10pm.\n3. Rent is due on the 1st.",
+      action: "Can I keep a cat if the landlord agrees in writing?",
+    },
+    {
+      document: "1. Returns within 30 days.\n2. Sale items cannot be returned.\n3. The item must be unused.",
+      action: "I want to return a full-price unused lamp I bought 10 days ago.",
+    },
+    {
+      document: "1. Warranty lasts 12 months.\n2. Water damage is not covered.\n3. You need the receipt.",
+      action: "I dropped the phone in the sink. Will the warranty cover it?",
+    },
+    {
+      document: "1. Employees get 10 vacation days a year.\n2. No vacation the last two weeks of December.\n3. Ask your manager 2 weeks ahead.",
+      action: "I want the first week of June off and I asked a month ago.",
     },
   ],
   "clause-finder": [

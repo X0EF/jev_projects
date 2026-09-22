@@ -165,27 +165,35 @@ async function typesafe(key, state, questions) {
   return { ok: r.ok, status: r.status, json };
 }
 
+function ruleBlocks(raw) {
+  const text = String(raw || "").replace(/\r\n/g, "\n").trim();
+  if (!text) return [];
+  const chunks = /^\s*---\s*$/m.test(text)
+    ? text.split(/^\s*---\s*$/m)
+    : /\n\s*\n/.test(text)
+      ? text.split(/\n\s*\n/)
+      : text.split("\n");
+  return chunks.map((s) => s.trim()).filter(Boolean).slice(0, 20);
+}
+
+function ruleFromBlock(block) {
+  const lines = block.split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  if (lines.length === 1) {
+    const split = lines[0].match(/^(.{1,80}?)\s*:\s+(.+)$/);
+    if (split) return { label: split[1].trim(), detail: split[2].trim() };
+    return { label: lines[0], detail: lines[0] };
+  }
+  return { label: lines[0].replace(/:\s*$/, "").trim(), detail: lines.slice(1).join(" ") };
+}
+
 function parseRules(raw) {
-  const lines = String(raw || "")
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 20);
   const used = new Set();
   const rules = [];
-  for (const line of lines) {
-    const split = line.match(/^(.{1,60}?)\s*[:|]\s+(.+)$/);
-    let label;
-    let detail;
-    if (split) {
-      label = split[1].replace(/^[-*\d.)\s]+/, "").trim();
-      detail = split[2].trim();
-    } else {
-      label = line.replace(/^[-*\d.)\s]+/, "").trim();
-      detail = label;
-    }
-    if (!label) continue;
-    let id = label
+  for (const block of ruleBlocks(raw)) {
+    const parsed = ruleFromBlock(block);
+    if (!parsed || !parsed.label) continue;
+    let id = parsed.label
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "")
@@ -195,14 +203,14 @@ function parseRules(raw) {
     let n = 2;
     while (used.has(unique)) unique = id.slice(0, 28) + "_" + n++;
     used.add(unique);
-    rules.push({ id: unique, label, detail: detail.slice(0, 240) });
+    rules.push({ id: unique, label: parsed.label, detail: parsed.detail.slice(0, 500) });
   }
   if (!rules.length) return null;
   if (!rules.some((r) => r.id === "none")) {
     rules.push({
       id: "none",
       label: "None",
-      detail: "The post does not violate a listed rule",
+      detail: "The post does not break any rule above",
     });
   }
   return rules;
@@ -210,20 +218,23 @@ function parseRules(raw) {
 
 async function ruleCheck(key, state) {
   const rules = parseRules(state.rules);
-  if (!rules) return { error: "Add at least one rule, one per line", status: 400 };
+  if (!rules) return { error: "Add at least one rule. Separate rules with a line that says ---", status: 400 };
   const post = String(state.post || "").trim();
   const image = String(state.image || "").trim();
   if (!post && !image) return { error: "Add a post or describe the image", status: 400 };
-  const criteria = Object.fromEntries(rules.map((r) => [r.id, r.detail]));
+  const listed = rules.map((r) => ({ name: r.label, text: r.detail }));
+  const criteria = Object.fromEntries(
+    rules.map((r) => [r.id, 'Rule "' + r.label + '": ' + r.detail])
+  );
   const questions = {
     rule: {
       type: "choice",
       instructions:
-        "Which Discord rule does this post violate? Categories are in `rules`. Read `post` and `image` together. `image` is a description of an attached picture. Choose none when no listed rule is broken.",
+        "Each entry in `rules` is one rule. `name` is the rule. `text` says what breaking it looks like. Which rule does `post` break? `image` is alt text for an attached file, not the file itself. Choose none if no rule is broken.",
       criteria,
     },
   };
-  const { ok, status, json } = await typesafe(key, { rules, post, image }, questions);
+  const { ok, status, json } = await typesafe(key, { rules: listed, post, image }, questions);
   if (!ok) return { error: json.message || json.error || "TypeSafe error", detail: json, status };
   json.rules = rules;
   return { json, status: 200 };
@@ -256,6 +267,53 @@ async function clauseFinder(key, state) {
   return { json, status: 200 };
 }
 
+async function termsGate(key, state) {
+  const raw = String(state.document || "");
+  const action = String(state.action || "").trim();
+  const lines = raw
+    .split(/\r?\n/)
+    .map((text, i) => ({ id: String(i + 1), text: text.trim() }))
+    .filter((l) => l.text)
+    .slice(0, 60);
+  if (!lines.length || !action) return { error: "Need terms and an action", status: 400 };
+  const picked = await typesafe(key, { action, lines }, {
+    line: {
+      type: "choice",
+      instructions: "Which single line id governs whether `action` is allowed? Pick the closest line even if that line permits the action.",
+      criteria: Object.fromEntries(lines.map((l) => [l.id, l.text.slice(0, 180)])),
+    },
+  });
+  if (!picked.ok) return { error: picked.json.message || picked.json.error || "TypeSafe error", detail: picked.json, status: picked.status };
+  const id = picked.json.answers.line.choice;
+  const clause = (lines.find((l) => String(l.id) === String(id)) || lines[0]).text;
+  const judged = await typesafe(key, { action, clause }, {
+    violates: {
+      type: "noul",
+      instructions: "Does `action` violate `clause`?",
+      criteria: {
+        true: "The action does what this clause forbids",
+        false: "This clause permits the action, or does not cover it",
+      },
+    },
+  });
+  if (!judged.ok) return { error: judged.json.message || judged.json.error || "TypeSafe error", detail: judged.json, status: judged.status };
+  return {
+    json: {
+      model: judged.json.model,
+      answers: {
+        line: picked.json.answers.line,
+        violates: judged.json.answers.violates,
+      },
+      lines,
+      calls: {
+        choice: { model: picked.json.model, usage: picked.json.usage },
+        noul: { model: judged.json.model, usage: judged.json.usage },
+      },
+    },
+    status: 200,
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -271,6 +329,11 @@ module.exports = async function handler(req, res) {
   if (!state || !site) return res.status(400).json({ error: "Missing site or state" });
   if (site === "rule-check") {
     const out = await ruleCheck(key, state);
+    if (out.error) return res.status(out.status || 500).json({ error: out.error, detail: out.detail });
+    return res.status(200).json(out.json);
+  }
+  if (site === "terms-gate") {
+    const out = await termsGate(key, state);
     if (out.error) return res.status(out.status || 500).json({ error: out.error, detail: out.detail });
     return res.status(200).json(out.json);
   }

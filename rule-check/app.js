@@ -25,7 +25,7 @@ function renderTriage(a) {
   return `<p class="stamp">${a.department.choice}</p>
     ${score("Urgency", a.urgency)}
     ${noul("Refund asked", a.refund_asked.noul)}
-    <p class="meta">department confidence ${Number(a.department.confidence).toFixed(2)} · next: ${
+    <p class="meta">department confidence ${Number(a.department.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""} · next: ${
       a.refund_asked.noul > 0.8 && a.department.choice === "billing" ? "auto-refund if policy allows" : "human queue"
     }</p>`;
 }
@@ -34,7 +34,8 @@ function renderLead(a) {
   return `${score("Overall fit", a.overall)}
     ${noul("Industry", a.industry_fit.noul)}
     ${noul("Stage", a.stage_fit.noul)}
-    ${noul("Buyer", a.buyer_fit.noul)}`;
+    ${noul("Buyer", a.buyer_fit.noul)}
+    <p class="meta">confidence ${Number(a.overall.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderListing(a) {
@@ -43,12 +44,12 @@ function renderListing(a) {
     ${noul("Prohibited", a.prohibited.noul)}
     ${noul("Counterfeit", a.counterfeit.noul)}
     ${noul("Spam", a.spam.noul)}
-    <p class="meta">confidence ${Number(a.decision.confidence).toFixed(2)}</p>`;
+    <p class="meta">confidence ${Number(a.decision.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderCite(a) {
   return `<p class="stamp">${a.support.choice}</p>
-    <p class="meta">confidence ${Number(a.support.confidence).toFixed(2)} · ${
+    <p class="meta">confidence ${Number(a.support.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""} · ${
       Number(a.support.confidence) < 0.45 ? "send to review" : "act"
     }</p>
     <pre>${JSON.stringify(a.support.probabilities, null, 2)}</pre>`;
@@ -60,21 +61,23 @@ function renderGuard(a) {
     ${noul("Jailbreak", a.jailbreak.noul)}
     ${noul("Injection", a.injection.noul)}
     ${noul("PII", a.pii.noul)}
-    ${score("Harm if complied", a.harm)}`;
+    ${score("Harm if complied", a.harm)}
+    <p class="meta">confidence ${Number(a.harm.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderSkill(a) {
   const pick = a.needs_skill.noul < 0.4 ? "none" : a.skill.choice;
   return `<p class="stamp">${pick}</p>
     ${noul("Needs a skill", a.needs_skill.noul)}
-    <p class="meta">raw choice ${a.skill.choice} · confidence ${Number(a.skill.confidence).toFixed(2)}</p>`;
+    <p class="meta">raw choice ${a.skill.choice} · confidence ${Number(a.skill.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderResume(a) {
   return `<p class="stamp">${a.next_step.choice}</p>
     ${score("Required skills", a.required_skills)}
     ${score("Leadership", a.leadership)}
-    ${score("Domain", a.domain)}`;
+    ${score("Domain", a.domain)}
+    <p class="meta">confidence ${Number(a.next_step.confidence).toFixed(2)}${resources(a) ? " · " + resources(a) : ""}</p>`;
 }
 
 function renderClause(payload) {
@@ -88,12 +91,26 @@ function renderClause(payload) {
   return `${noul("Document answers the question", a.answered.noul)}
     <p class="stamp">line ${id}</p>
     <pre>${html}</pre>
-    <p class="meta">Jev selected an id. Text is copied, not rewritten.</p>`;
+    <p class="meta">confidence ${Number(a.line.confidence).toFixed(2)}${resources(payload) ? " · " + resources(payload) : ""} · Jev selected an id. Text is copied, not rewritten.</p>`;
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+
+function resources(source) {
+  const usage = (source && source.usage) || {};
+  const inputTokens = Number(usage.input_tokens);
+  const outputTokens = Number(usage.output_tokens);
+  const cost = (Number.isFinite(inputTokens) ? inputTokens : 0) / 1e6 * 0.042;
+  return [
+    Number.isFinite(inputTokens) ? inputTokens.toLocaleString() + " in" : "",
+    Number.isFinite(outputTokens) ? outputTokens.toLocaleString() + " out" : "",
+    Number.isFinite(inputTokens) ? "$" + (cost < 0.01 ? cost.toFixed(6) : cost.toFixed(4)) : "",
+    source && source.model ? escapeHtml(source.model) : "",
+  ].filter(Boolean).join(" · ");
+}
+
 
 function renderRule(payload) {
   const a = payload.answers;
@@ -107,9 +124,19 @@ function renderRule(payload) {
     .sort((x, y) => Number(y[1]) - Number(x[1]))
     .map(([id, v]) => noul(escapeHtml(labelOf(id)), v))
     .join("");
+  const usage = payload.usage || {};
+  const inputTokens = Number(usage.input_tokens);
+  const outputTokens = Number(usage.output_tokens);
+  const cost = (Number.isFinite(inputTokens) ? inputTokens : 0) / 1e6 * 0.042;
+  const resources = [
+    Number.isFinite(inputTokens) ? inputTokens.toLocaleString() + " in" : "",
+    Number.isFinite(outputTokens) ? outputTokens.toLocaleString() + " out" : "",
+    Number.isFinite(inputTokens) ? "$" + (cost < 0.01 ? cost.toFixed(6) : cost.toFixed(4)) : "",
+    payload.model ? escapeHtml(payload.model) : "",
+  ].filter(Boolean).join(" · ");
   return `<p class="stamp">${escapeHtml(labelOf(a.rule.choice))}</p>
     ${rows}
-    <p class="meta">confidence ${Number(a.rule.confidence).toFixed(2)} · probabilities sum to 1</p>`;
+    <p class="meta">confidence ${Number(a.rule.confidence).toFixed(2)}${resources ? " · " + resources : ""}</p>`;
 }
 
 const renders = { renderTriage, renderLead, renderListing, renderCite, renderGuard, renderSkill, renderResume, renderClause, renderRule };
@@ -353,43 +380,43 @@ const SAMPLES = {
   ],
   "rule-check": [
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #game-dev\nJoin my server for free Nitro codes https://discord.gg/fake-nitro-drop — last chance tonight",
     },
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #game-dev\nAnyone else seeing the character controller slide on slopes after the physics update?",
     },
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #game-dev\n@maya you are useless at this. Shut up or I will find you.",
     },
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #game-dev\nHere is where Maya lives. 14 Birch St, apartment 3. Her number is 555-0148. Go say hi.",
     },
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #game-dev\nWhat chili recipe uses two cups of sugar? Making dinner.",
     },
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #showcase\nnew set, DM for the link",
     },
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #showcase\nshipped the build, desk photo attached",
     },
     {
-      rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
+      rules: "spam\nUnsolicited ads, invite links, or repeated self-promo\n---\nnsfw\nSexual content or gore\n---\nharassment\nInsults, slurs, threats, or targeting a person\n---\ndoxxing\nPrivate contact details, address, or real name shared to harm someone\n---\noff_topic\nNot about game development",
       post: "Channel: #showcase\ngraphic injury clip, no warning",
     },
     {
-      rules: "be_kind: No insults or pile-ons\nno_ads: No selling or referral links\nspoilers: Mark story spoilers for the current season",
+      rules: "be kind\nNo insults or pile-ons\n---\nno ads\nNo selling or referral links\n---\nspoilers\nMark story spoilers for the current season",
       post: "Channel: #show-talk\nEnding spoiler: the captain was the thief the whole time. Loved it.",
     },
     {
-      rules: "be_kind: No insults or pile-ons\nno_ads: No selling or referral links\nspoilers: Mark story spoilers for the current season",
+      rules: "be kind\nNo insults or pile-ons\n---\nno ads\nNo selling or referral links\n---\nspoilers\nMark story spoilers for the current season",
       post: "Channel: #show-talk\nThe lighting in episode 3 was gorgeous. No plot talk.",
     },
   ],
@@ -602,16 +629,24 @@ function showFile(file) {
   previewUrl = URL.createObjectURL(file);
   const video = (file.type || "").startsWith("video/") || /\.webm$/i.test(file.name);
   const el = document.createElement(video ? "video" : "img");
-  el.src = previewUrl;
   if (video) {
-    el.controls = true;
     el.muted = true;
+    el.defaultMuted = true;
+    el.loop = true;
+    el.autoplay = true;
     el.playsInline = true;
+    el.preload = "auto";
+    el.setAttribute("muted", "");
+    el.setAttribute("autoplay", "");
+    el.setAttribute("loop", "");
+    el.setAttribute("playsinline", "");
   } else {
     el.alt = file.name;
   }
+  el.src = previewUrl;
   preview.appendChild(el);
   preview.hidden = false;
+  if (video) el.play().catch(() => {});
 }
 
 attachment.addEventListener("change", () => {
@@ -679,7 +714,12 @@ form.addEventListener("submit", async (e) => {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || res.statusText);
     const fn = renders[form.dataset.render];
-    out.innerHTML = fn(json.lines || json.rules ? json : json.answers);
+    const payload = json.lines || json.rules ? json : json.answers;
+    if (payload && json.usage && !payload.usage) {
+      payload.usage = json.usage;
+      payload.model = json.model;
+    }
+    out.innerHTML = fn(payload);
   } catch (ex) {
     out.innerHTML = "";
     err.textContent = ex.message || String(ex);
