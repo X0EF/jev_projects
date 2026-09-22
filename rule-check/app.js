@@ -355,52 +355,42 @@ const SAMPLES = {
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
       post: "Channel: #game-dev\nJoin my server for free Nitro codes https://discord.gg/fake-nitro-drop — last chance tonight",
-      image: "",
     },
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
       post: "Channel: #game-dev\nAnyone else seeing the character controller slide on slopes after the physics update?",
-      image: "",
     },
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
       post: "Channel: #game-dev\n@maya you are useless at this. Shut up or I will find you.",
-      image: "",
     },
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
       post: "Channel: #game-dev\nHere is where Maya lives. 14 Birch St, apartment 3. Her number is 555-0148. Go say hi.",
-      image: "",
     },
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
       post: "Channel: #game-dev\nWhat chili recipe uses two cups of sugar? Making dinner.",
-      image: "",
     },
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
-      post: "Channel: #showcase",
-      image: "Screenshot of an adult posing without a shirt, captioned 'new set, DM for the link'.",
+      post: "Channel: #showcase\nnew set, DM for the link",
     },
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
-      post: "Channel: #showcase",
-      image: "Photo of a desk with a laptop, a mug, and a sticky note that says 'ship the build'.",
+      post: "Channel: #showcase\nshipped the build, desk photo attached",
     },
     {
       rules: "spam: Unsolicited ads, invite links, or repeated self-promo\nnsfw: Sexual content or gore\nharassment: Insults, slurs, threats, or targeting a person\ndoxxing: Private contact details, address, or real name shared to harm someone\noff_topic: Not about game development",
-      post: "Channel: #showcase",
-      image: "A still of a graphic injury from a horror clip, posted with no warning.",
+      post: "Channel: #showcase\ngraphic injury clip, no warning",
     },
     {
       rules: "be_kind: No insults or pile-ons\nno_ads: No selling or referral links\nspoilers: Mark story spoilers for the current season",
       post: "Channel: #show-talk\nEnding spoiler: the captain was the thief the whole time. Loved it.",
-      image: "",
     },
     {
       rules: "be_kind: No insults or pile-ons\nno_ads: No selling or referral links\nspoilers: Mark story spoilers for the current season",
       post: "Channel: #show-talk\nThe lighting in episode 3 was gorgeous. No plot talk.",
-      image: "",
     },
   ],
   "clause-finder": [
@@ -483,8 +473,11 @@ const VISION_COOKIE = "rule_check_vision";
 const visionKey = document.getElementById("visionKey");
 const visionProvider = document.getElementById("visionProvider");
 const attachment = document.getElementById("attachment");
+const preview = document.getElementById("preview");
+let previewUrl = "";
 const imageField = document.getElementById("image");
 const cap = document.getElementById("cap");
+const altBtn = document.getElementById("alt");
 
 function readCookie(name) {
   const hit = document.cookie.split("; ").find((part) => part.startsWith(name + "="));
@@ -598,11 +591,42 @@ loadVisionCookie();
 visionKey.addEventListener("change", writeVisionCookie);
 visionProvider.addEventListener("change", writeVisionCookie);
 
-attachment.addEventListener("change", async () => {
+function showFile(file) {
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  preview.replaceChildren();
+  if (!file) {
+    preview.hidden = true;
+    previewUrl = "";
+    return;
+  }
+  previewUrl = URL.createObjectURL(file);
+  const video = (file.type || "").startsWith("video/") || /\.webm$/i.test(file.name);
+  const el = document.createElement(video ? "video" : "img");
+  el.src = previewUrl;
+  if (video) {
+    el.controls = true;
+    el.muted = true;
+    el.playsInline = true;
+  } else {
+    el.alt = file.name;
+  }
+  preview.appendChild(el);
+  preview.hidden = false;
+}
+
+attachment.addEventListener("change", () => {
+  const file = attachment.files && attachment.files[0];
+  altBtn.disabled = !file;
+  err.textContent = "";
+  cap.textContent = file ? "File ready. Generate alt text to fill the description." : "";
+  showFile(file);
+  if (file) imageField.dispatchEvent(new Event("input", { bubbles: true }));
+});
+
+altBtn.addEventListener("click", async () => {
   const file = attachment.files && attachment.files[0];
   if (!file) return;
   err.textContent = "";
-  imageField.dispatchEvent(new Event("input", { bubbles: true }));
   if (file.size > 8 * 1024 * 1024) {
     err.textContent = "Use a file under 8 MB.";
     return;
@@ -614,7 +638,7 @@ attachment.addEventListener("change", async () => {
   }
   writeVisionCookie();
   cap.textContent = "Reading frames…";
-  btn.disabled = true;
+  altBtn.disabled = true;
   try {
     const video = (file.type || "").startsWith("video/") || /\.webm$/i.test(file.name);
     const frames = video ? await framesFromVideo(file) : await framesFromImage(file);
@@ -628,12 +652,12 @@ attachment.addEventListener("change", async () => {
     if (!res.ok) throw new Error(json.error || res.statusText);
     imageField.value = json.text;
     imageField.dispatchEvent(new Event("input", { bubbles: true }));
-    cap.textContent = "Description is in the image field. Jev will judge that text.";
+    cap.textContent = "Alt text is in the description box.";
   } catch (ex) {
-    cap.textContent = "The key is not stored on the server. It is sent only to describe a file you choose.";
+    cap.textContent = "";
     err.textContent = ex.message || String(ex);
   } finally {
-    btn.disabled = false;
+    altBtn.disabled = !(attachment.files && attachment.files[0]);
   }
 });
 

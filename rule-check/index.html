@@ -14,7 +14,7 @@
     <header>
       <div class="kicker">Discord moderation</div>
       <h1>Rule Check</h1>
-      <p class="blurb">Paste the server rules as categories, then the post. A small image, GIF, or WebM is turned into stills in the browser and described with your own vision key. Jev returns the probability of each rule.</p>
+      <p class="blurb">Paste the server rules, then the post. If you attach an image, GIF, or WebM, generate alt text from it. Jev scores the post and that text.</p>
       <nav class="nav"><a href="/">Index</a> <a href="/triage-desk/">Triage Desk</a> <a href="/lead-fit/">Lead Fit</a> <a href="/listing-cop/">Listing Cop</a> <a href="/cite-check/">Cite Check</a> <a href="/prompt-guard/">Prompt Guard</a> <a href="/skill-pick/">Skill Pick</a> <a href="/resume-match/">Resume Match</a> <a href="/clause-finder/">Clause Finder</a> <a href="/rule-check/">Rule Check</a></nav>
     </header>
     <div class="grid">
@@ -25,16 +25,18 @@
         <textarea id="post" class="short" name="post"></textarea>
         <label for="attachment">Image, GIF, or WebM</label>
         <input id="attachment" type="file" accept="image/*,video/webm,.gif,.webm">
+        <div id="preview" class="preview" hidden></div>
         <label for="visionProvider">Vision model</label>
         <select id="visionProvider">
+          <option value="gemini" selected>Google · Gemini 3.1 Flash-Lite</option>
           <option value="openai">OpenAI · GPT-4.1 mini</option>
-          <option value="gemini">Google · Gemini 3.1 Flash-Lite</option>
         </select>
         <label for="visionKey">Vision API key</label>
         <input id="visionKey" type="password" autocomplete="off" placeholder="Saved in a cookie on this browser">
-        <p class="meta" id="cap">The key is not stored on the server. It is sent only to describe a file you choose.</p>
-        <label for="image">Image description</label>
-        <textarea id="image" class="short" name="image" placeholder="Filled from the file, or type a description."></textarea>
+        <button id="alt" type="button" disabled>Generate alt text</button>
+        <p class="meta" id="cap"></p>
+        <label for="image">Description</label>
+        <textarea id="image" class="short" name="image" placeholder="Alt text appears here."></textarea>
         <button id="go" type="submit">Check post</button>
         <p class="err" id="err"></p>
       </form>

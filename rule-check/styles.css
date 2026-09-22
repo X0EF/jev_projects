@@ -47,8 +47,11 @@ textarea, input[type=text], input[type=password], select {
   margin-bottom: 14px;
 }
 input[type=file] { margin: 0 0 14px; font: inherit; }
+.preview { margin: 0 0 14px; }
+.preview img, .preview video { display: block; max-width: 100%; max-height: 280px; background: #111; }
 textarea { min-height: 140px; resize: vertical; }
 textarea.short { min-height: 96px; }
+textarea[readonly] { background: #f7f3ea; color: var(--ink); }
 button {
   appearance: none;
   border: 0;
@@ -60,6 +63,7 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: 0.5; cursor: wait; }
+#alt { margin-bottom: 14px; }
 .err { color: var(--bad); font-size: 14px; margin-top: 10px; }
 .stamp {
   font-family: Fraunces, Georgia, serif;

@@ -1,5 +1,5 @@
 const PROMPT =
-  "Write alt text for a Discord moderation check. One or two sentences. Say what is visible, any words on screen, and whether it shows nudity, gore, a threat, or an advertisement. These frames are from one short attachment.";
+  "Write alt text for a Discord moderation check. One or two sentences. Say what is visible, any words on screen. These frames are from one short attachment.";
 
 const MAX_FRAMES = 2;
 const MAX_B64 = 700000;
