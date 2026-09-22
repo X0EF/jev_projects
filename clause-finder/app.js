@@ -91,7 +91,9 @@ function renderClause(payload) {
   return `${noul("Document answers the question", a.answered.noul)}
     <p class="stamp">line ${id}</p>
     <pre>${html}</pre>
-    <p class="meta">confidence ${Number(a.line.confidence).toFixed(2)}${resources(payload) ? " · " + resources(payload) : ""} · Jev selected an id. Text is copied, not rewritten.</p>`;
+    <p class="meta">confidence ${Number(a.line.confidence).toFixed(2)}${resources(payload) ? " · " + resources(payload) : ""} · Jev selected an id. Text is copied, not rewritten.</p>
+    <button type="button" id="violate">Does this violate the clause?</button>
+    <div id="verdict"></div>`;
 }
 
 function escapeHtml(s) {
@@ -449,6 +451,38 @@ form.addEventListener("submit", async (e) => {
       payload.model = json.model;
     }
     out.innerHTML = fn(payload);
+    const violateBtn = document.getElementById("violate");
+    if (violateBtn && payload.lines && payload.answers && payload.answers.line) {
+      violateBtn.addEventListener("click", async () => {
+        const line = payload.lines.find((ln) => String(ln.id) === String(payload.answers.line.choice));
+        const verdict = document.getElementById("verdict");
+        if (!line) return;
+        violateBtn.disabled = true;
+        verdict.innerHTML = "<p class='meta'>Asking Jev…</p>";
+        try {
+          const res2 = await fetch("/api/judge", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              site: "clause-finder",
+              state: { query: data.query, clause: line.text },
+            }),
+          });
+          const json2 = await res2.json();
+          if (!res2.ok) throw new Error(json2.error || res2.statusText);
+          const n = Number(json2.answers.violates.noul);
+          const meta = resources(json2);
+          verdict.innerHTML = `<p class="stamp">${n >= 0.5 ? "Violates" : "Allowed"}</p>
+            ${noul("Violates this clause", n)}
+            <p class="meta">noul ${n.toFixed(2)}${meta ? " · " + meta : ""}</p>`;
+        } catch (ex2) {
+          verdict.innerHTML = "";
+          err.textContent = ex2.message || String(ex2);
+        } finally {
+          violateBtn.disabled = false;
+        }
+      });
+    }
   } catch (ex) {
     out.innerHTML = "";
     err.textContent = ex.message || String(ex);

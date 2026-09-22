@@ -267,26 +267,11 @@ async function clauseFinder(key, state) {
   return { json, status: 200 };
 }
 
-async function termsGate(key, state) {
-  const raw = String(state.document || "");
-  const action = String(state.action || "").trim();
-  const lines = raw
-    .split(/\r?\n/)
-    .map((text, i) => ({ id: String(i + 1), text: text.trim() }))
-    .filter((l) => l.text)
-    .slice(0, 60);
-  if (!lines.length || !action) return { error: "Need terms and an action", status: 400 };
-  const picked = await typesafe(key, { action, lines }, {
-    line: {
-      type: "choice",
-      instructions: "Which single line id governs whether `action` is allowed? Pick the closest line even if that line permits the action.",
-      criteria: Object.fromEntries(lines.map((l) => [l.id, l.text.slice(0, 180)])),
-    },
-  });
-  if (!picked.ok) return { error: picked.json.message || picked.json.error || "TypeSafe error", detail: picked.json, status: picked.status };
-  const id = picked.json.answers.line.choice;
-  const clause = (lines.find((l) => String(l.id) === String(id)) || lines[0]).text;
-  const judged = await typesafe(key, { action, clause }, {
+async function clauseViolate(key, state) {
+  const action = String(state.query || state.action || "").trim();
+  const clause = String(state.clause || "").trim();
+  if (!action || !clause) return { error: "Need the question and the flagged clause", status: 400 };
+  const { ok, status, json } = await typesafe(key, { action, clause }, {
     violates: {
       type: "noul",
       instructions: "Does `action` violate `clause`?",
@@ -296,19 +281,60 @@ async function termsGate(key, state) {
       },
     },
   });
-  if (!judged.ok) return { error: judged.json.message || judged.json.error || "TypeSafe error", detail: judged.json, status: judged.status };
+  if (!ok) return { error: json.message || json.error || "TypeSafe error", detail: json, status };
+  return { json, status: 200 };
+}
+
+async function termsGate(key, state) {
+  const raw = String(state.document || "");
+  const action = String(state.action || "").trim();
+  const lines = raw
+    .split(/\r?\n/)
+    .map((text, i) => ({ id: String(i + 1), text: text.trim() }))
+    .filter((l) => l.text)
+    .slice(0, 60);
+  if (!lines.length || !action) return { error: "Need terms and an action", status: 400 };
+  const criteria = Object.fromEntries(lines.map((l) => [l.id, l.text.slice(0, 180)]));
+  criteria.none = "No listed rule is related to this action.";
+  const picked = await typesafe(key, { action, lines }, {
+    line: {
+      type: "choice",
+      instructions: "Which listed rule is related to `action`? Choose none if no rule is about this action. Do not pick a broad rule just to have an answer.",
+      criteria,
+    },
+  });
+  if (!picked.ok) return { error: picked.json.message || picked.json.error || "TypeSafe error", detail: picked.json, status: picked.status };
+  const id = String(picked.json.answers.line.choice);
+  const calls = {
+    choice: { model: picked.json.model, usage: picked.json.usage },
+    noul: null,
+  };
+  let violates = null;
+  if (id !== "none") {
+    const clause = (lines.find((l) => String(l.id) === id) || {}).text || "";
+    const judged = await typesafe(key, { action, clause }, {
+      violates: {
+        type: "noul",
+        instructions: "Does `action` violate `clause`? Answer false when the action does not do what this rule forbids.",
+        criteria: {
+          true: "The action breaks this specific rule",
+          false: "The action does not violate this specific rule",
+        },
+      },
+    });
+    if (!judged.ok) return { error: judged.json.message || judged.json.error || "TypeSafe error", detail: judged.json, status: judged.status };
+    violates = judged.json.answers.violates;
+    calls.noul = { model: judged.json.model, usage: judged.json.usage };
+  }
   return {
     json: {
-      model: judged.json.model,
+      model: picked.json.model,
       answers: {
         line: picked.json.answers.line,
-        violates: judged.json.answers.violates,
+        violates,
       },
       lines,
-      calls: {
-        choice: { model: picked.json.model, usage: picked.json.usage },
-        noul: { model: judged.json.model, usage: judged.json.usage },
-      },
+      calls,
     },
     status: 200,
   };
@@ -338,7 +364,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json(out.json);
   }
   if (site === "clause-finder") {
-    const out = await clauseFinder(key, state);
+    const out = state.clause ? await clauseViolate(key, state) : await clauseFinder(key, state);
     if (out.error) return res.status(out.status || 500).json({ error: out.error, detail: out.detail });
     return res.status(200).json(out.json);
   }

@@ -97,22 +97,28 @@ function renderClause(payload) {
 function renderTerms(payload) {
   const a = payload.answers;
   const lines = payload.lines || [];
-  const id = a.line && a.line.choice;
-  const violates = Number(a.violates.noul);
-  const html = lines.map((ln) => {
-    const mark = String(ln.id) === String(id) ? "hl" : "";
-    return `<div class="${mark}">${ln.id}. ${escapeHtml(ln.text)}</div>`;
-  }).join("");
+  const id = a.line && String(a.line.choice);
+  const related = id && id !== "none";
+  const violates = a.violates ? Number(a.violates.noul) : null;
+  const broken = related && violates >= 0.5;
   const choiceCall = payload.calls && payload.calls.choice;
   const noulCall = payload.calls && payload.calls.noul;
   const choiceMeta = resources(choiceCall);
   const noulMeta = resources(noulCall);
-  return `<p class="stamp">${violates >= 0.5 ? "Violates" : "Allowed"}</p>
-    ${noul("Violates this clause", violates)}
-    <p class="stamp">line ${id}</p>
-    <pre>${html}</pre>
-    <p class="meta">clause confidence ${Number(a.line.confidence).toFixed(2)}${choiceMeta ? " · " + choiceMeta : ""}</p>
-    <p class="meta">noul ${violates.toFixed(2)}${noulMeta ? " · " + noulMeta : ""}</p>`;
+  const usage = [choiceMeta, noulMeta].filter(Boolean).join(" · ");
+  if (!broken) {
+    return `${seal("clear", "Does not violate")}
+      <p class="meta">${usage}</p>`;
+  }
+  const hit = lines.find((ln) => String(ln.id) === id);
+  return `${seal("broken", "Violates")}
+    <p class="cite">line ${id}. ${hit ? escapeHtml(hit.text) : ""}</p>
+    ${noul("Violates this rule", violates)}
+    <p class="meta">confidence ${Number(a.line.confidence).toFixed(2)}${usage ? " · " + usage : ""}</p>`;
+}
+
+function seal(kind, label) {
+  return `<div class="verdict ${kind}"><p class="seal" role="status"><span class="seal-kicker">Terms Gate</span><span class="seal-word">${label}</span></p></div>`;
 }
 
 function escapeHtml(s) {
