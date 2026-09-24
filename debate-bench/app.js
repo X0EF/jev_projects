@@ -30,11 +30,15 @@ function resources(source) {
   ].filter(Boolean).join(" · ");
 }
 
+function seal(kind, label) {
+  return `<div class="verdict ${kind}"><p class="seal" role="status"><span class="seal-kicker">Debate Bench</span><span class="seal-word">${label}</span></p></div>`;
+}
+
 function stampFor(winner) {
-  if (winner === "a") return "Side A";
-  if (winner === "b") return "Side B";
-  if (winner === "draw") return "Draw";
-  return "No contest";
+  if (winner === "a") return seal("win-a", "Side A wins");
+  if (winner === "b") return seal("win-b", "Side B wins");
+  if (winner === "draw") return seal("draw", "Draw");
+  return seal("none", "No contest");
 }
 
 function guardLine(letter, g) {
@@ -55,7 +59,7 @@ function renderDebate(payload) {
     </div>`;
   }).join("");
   const totals = v.totals || { a: 0, b: 0 };
-  return `<p class="stamp">${stampFor(v.winner)}</p>
+  return `${stampFor(v.winner)}
     ${guardLine("a", disc.a || {})}
     ${guardLine("b", disc.b || {})}
     <div class="row"><span>Weighted total A</span><span>${Number(totals.a).toFixed(2)} / 2</span></div>${bar(Number(totals.a) / 2)}
