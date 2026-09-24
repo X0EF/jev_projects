@@ -285,6 +285,130 @@ async function clauseViolate(key, state) {
   return { json, status: 200 };
 }
 
+function parseCriteria(raw) {
+  const used = new Set();
+  const rows = [];
+  for (const line of String(raw || "").replace(/\r\n/g, "\n").split("\n")) {
+    const text = line.trim();
+    if (!text) continue;
+    const parts = text.split("|").map((s) => s.trim());
+    const name = parts[0];
+    if (!name) continue;
+    const weight = Math.min(10, Math.max(0.1, Number(parts[1]) || 1));
+    const detail = parts.slice(2).join(" | ") || name;
+    let id = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 24);
+    if (!id || !/^[a-z]/.test(id)) id = "c" + (rows.length + 1);
+    let unique = id;
+    let n = 2;
+    while (used.has(unique)) unique = id.slice(0, 20) + "_" + n++;
+    used.add(unique);
+    rows.push({ id: unique, name: name.slice(0, 80), weight, detail: detail.slice(0, 400) });
+    if (rows.length >= 6) break;
+  }
+  return rows;
+}
+
+function discardSide(ungrounded, fallacy) {
+  const u = Number(ungrounded);
+  const f = Number(fallacy);
+  const drop = u >= 0.65 || f >= 0.65;
+  const reasons = [];
+  if (u >= 0.65) reasons.push("ungrounded");
+  if (f >= 0.65) reasons.push("fallacy or bad faith");
+  return { ungrounded: u, fallacy: f, drop, reasons };
+}
+
+function debateVerdict(answers, criteria) {
+  const aGuard = discardSide(answers.a_ungrounded && answers.a_ungrounded.noul, answers.a_fallacy && answers.a_fallacy.noul);
+  const bGuard = discardSide(answers.b_ungrounded && answers.b_ungrounded.noul, answers.b_fallacy && answers.b_fallacy.noul);
+  const rows = criteria.map((c) => {
+    const a = answers["a_" + c.id];
+    const b = answers["b_" + c.id];
+    return {
+      id: c.id,
+      name: c.name,
+      weight: c.weight,
+      detail: c.detail,
+      a: a ? Number(a.score) : 0,
+      b: b ? Number(b.score) : 0,
+      aConf: a ? Number(a.confidence) : 0,
+      bConf: b ? Number(b.confidence) : 0,
+    };
+  });
+  const weightSum = rows.reduce((s, r) => s + r.weight, 0) || 1;
+  const totalA = rows.reduce((s, r) => s + r.a * r.weight, 0) / weightSum;
+  const totalB = rows.reduce((s, r) => s + r.b * r.weight, 0) / weightSum;
+  let winner = "draw";
+  if (aGuard.drop && bGuard.drop) winner = "none";
+  else if (aGuard.drop) winner = "b";
+  else if (bGuard.drop) winner = "a";
+  else if (Math.abs(totalA - totalB) < 0.12) winner = "draw";
+  else winner = totalA > totalB ? "a" : "b";
+  return {
+    winner,
+    discarded: { a: aGuard, b: bGuard },
+    totals: { a: totalA, b: totalB },
+    rows,
+  };
+}
+
+async function debateBench(key, state) {
+  const a = String(state.a || "").trim();
+  const b = String(state.b || "").trim();
+  const criteria = parseCriteria(state.criteria);
+  if (!a || !b) return { error: "Need both sides", status: 400 };
+  if (!criteria.length) return { error: "Add at least one criterion. Use: name | weight | what good looks like", status: 400 };
+  const listed = criteria.map((c) => ({ name: c.name, weight: c.weight, text: c.detail }));
+  const questions = {
+    a_ungrounded: {
+      type: "noul",
+      instructions: "Is `a` mostly ungrounded: slogans, invented facts, or claims with no support in the text itself?",
+      criteria: { true: "Mostly ungrounded or made-up", false: "Mostly backed by stated facts or a fair argument" },
+    },
+    b_ungrounded: {
+      type: "noul",
+      instructions: "Is `b` mostly ungrounded: slogans, invented facts, or claims with no support in the text itself?",
+      criteria: { true: "Mostly ungrounded or made-up", false: "Mostly backed by stated facts or a fair argument" },
+    },
+    a_fallacy: {
+      type: "noul",
+      instructions: "Does `a` rely on a clear fallacy or bad faith (insults, moving the goalposts, attacking the person instead of the point)?",
+      criteria: { true: "Fallacy or bad faith is the main move", false: "A fair attempt at the issue" },
+    },
+    b_fallacy: {
+      type: "noul",
+      instructions: "Does `b` rely on a clear fallacy or bad faith (insults, moving the goalposts, attacking the person instead of the point)?",
+      criteria: { true: "Fallacy or bad faith is the main move", false: "A fair attempt at the issue" },
+    },
+  };
+  for (const c of criteria) {
+    const rubric = [
+      "Weak on \"" + c.name + "\": " + c.detail,
+      "Mixed on \"" + c.name + "\"",
+      "Strong on \"" + c.name + "\": " + c.detail,
+    ];
+    questions["a_" + c.id] = {
+      type: "score",
+      instructions: "How well does `a` do on criterion \"" + c.name + "\"? Judge only that dimension. `criteria` lists the rubric.",
+      criteria: rubric,
+    };
+    questions["b_" + c.id] = {
+      type: "score",
+      instructions: "How well does `b` do on criterion \"" + c.name + "\"? Judge only that dimension. `criteria` lists the rubric.",
+      criteria: rubric,
+    };
+  }
+  const { ok, status, json } = await typesafe(key, { a, b, criteria: listed }, questions);
+  if (!ok) return { error: json.message || json.error || "TypeSafe error", detail: json, status };
+  json.criteria = criteria;
+  json.verdict = debateVerdict(json.answers, criteria);
+  return { json, status: 200 };
+}
+
 async function termsGate(key, state) {
   const raw = String(state.document || "");
   const action = String(state.action || "").trim();
@@ -365,6 +489,11 @@ module.exports = async function handler(req, res) {
   }
   if (site === "clause-finder") {
     const out = state.clause ? await clauseViolate(key, state) : await clauseFinder(key, state);
+    if (out.error) return res.status(out.status || 500).json({ error: out.error, detail: out.detail });
+    return res.status(200).json(out.json);
+  }
+  if (site === "debate-bench") {
+    const out = await debateBench(key, state);
     if (out.error) return res.status(out.status || 500).json({ error: out.error, detail: out.detail });
     return res.status(200).json(out.json);
   }

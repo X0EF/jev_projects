@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clause Finder</title>
+  <title>Debate Bench</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
@@ -12,22 +12,30 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="kicker">Select, don't generate</div>
-      <h1>Clause Finder</h1>
-      <p class="blurb">Paste a contract. Ask in English. Jev picks a line. You can then ask whether that clause is violated.</p>
+      <div class="kicker">AI referee</div>
+      <h1>Debate Bench</h1>
+      <p class="blurb">Paste two sides and weighted criteria. Jev drops ungrounded or bad-faith cases, scores each dimension, and code picks a winner.</p>
       <nav class="nav"><a href="/">Index</a> <a href="/triage-desk/">Triage Desk</a> <a href="/lead-fit/">Lead Fit</a> <a href="/listing-cop/">Listing Cop</a> <a href="/cite-check/">Cite Check</a> <a href="/prompt-guard/">Prompt Guard</a> <a href="/skill-pick/">Skill Pick</a> <a href="/resume-match/">Resume Match</a> <a href="/clause-finder/">Clause Finder</a> <a href="/rule-check/">Rule Check</a> <a href="/terms-gate/">Terms Gate</a> <a href="/debate-bench/">Debate Bench</a></nav>
     </header>
     <div class="grid">
-      <form id="form" class="panel" data-render="renderClause">
-        <label for="document">Contract / ToS</label>
-<textarea id="document" name="document" required></textarea>
-<label for="query">Question</label>
-<input id="query" name="query" type="text" required>
-        <button id="go" type="submit">Find clause</button>
+      <form id="form" class="panel" data-render="renderDebate">
+        <div class="sides">
+          <div>
+            <label for="a">Side A</label>
+            <textarea id="a" name="a" required></textarea>
+          </div>
+          <div>
+            <label for="b">Side B</label>
+            <textarea id="b" name="b" required></textarea>
+          </div>
+        </div>
+        <label for="criteria">Criteria. One per line: name | weight | what good looks like</label>
+        <textarea id="criteria" name="criteria" required></textarea>
+        <button id="go" type="submit">Referee</button>
         <p class="err" id="err"></p>
       </form>
       <div class="panel" id="out">
-        <p class="meta">Result lands here. Jev returns labels and probabilities, not essays.</p>
+        <p class="meta">Result lands here. Guards are nouls. Grades are scores. The winner is computed in code.</p>
       </div>
     </div>
   </div>
