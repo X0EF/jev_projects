@@ -359,10 +359,19 @@ function debateVerdict(answers, criteria) {
 async function debateBench(key, state) {
   const a = String(state.a || "").trim();
   const b = String(state.b || "").trim();
-  const criteria = parseCriteria(state.criteria);
+  const parsed = parseCriteria(String(state.criteria || "").trim() || [
+    "Evidence | 3 | Uses reasons you can check: a fact, example, or how something was made — not only 'because I like it'",
+    "Fairness | 2 | Deals with the other side instead of talking past them or insulting them",
+    "Clarity | 1 | Easy to follow",
+  ].join("\n"));
   if (!a || !b) return { error: "Need both sides", status: 400 };
-  if (!criteria.length) return { error: "Add at least one criterion. Use: name | weight | what good looks like", status: 400 };
-  const listed = criteria.map((c) => ({ name: c.name, weight: c.weight, text: c.detail }));
+  if (!parsed.length) return { error: "Add at least one criterion. Use: name | weight | what good looks like", status: 400 };
+  const listed = parsed.map((c) => ({ name: c.name, weight: c.weight, text: c.detail }));
+  const edgeCriteria = Object.fromEntries(
+    parsed.map((c) => [c.id, "The gap is mostly on \"" + c.name + "\": " + c.detail])
+  );
+  edgeCriteria.other_side_fell_apart = "One side is ungrounded or bad faith; that is the main reason, not a scored dimension.";
+  edgeCriteria.none = "No single dimension stands out; it is close or mixed.";
   const questions = {
     a_ungrounded: {
       type: "noul",
@@ -385,7 +394,7 @@ async function debateBench(key, state) {
       criteria: { true: "Fallacy or bad faith is the main move", false: "A fair attempt at the issue" },
     },
   };
-  for (const c of criteria) {
+  for (const c of parsed) {
     const rubric = [
       "Weak on \"" + c.name + "\": " + c.detail,
       "Mixed on \"" + c.name + "\"",
@@ -402,10 +411,27 @@ async function debateBench(key, state) {
       criteria: rubric,
     };
   }
+  questions.strongest_edge = {
+    type: "choice",
+    instructions: "Which one reason most explains which side is stronger? Pick a criterion if that dimension is the main gap. Pick other_side_fell_apart if one side is mostly ungrounded or bad faith. Pick none if it is close or mixed.",
+    criteria: edgeCriteria,
+  };
   const { ok, status, json } = await typesafe(key, { a, b, criteria: listed }, questions);
   if (!ok) return { error: json.message || json.error || "TypeSafe error", detail: json, status };
-  json.criteria = criteria;
-  json.verdict = debateVerdict(json.answers, criteria);
+  json.criteria = parsed;
+  json.verdict = debateVerdict(json.answers, parsed);
+  const edgeId = json.answers.strongest_edge && json.answers.strongest_edge.choice;
+  const edgeRow = parsed.find((c) => c.id === edgeId);
+  json.verdict.edge = edgeRow
+    ? edgeRow.name
+    : edgeId === "other_side_fell_apart"
+      ? "other side fell apart"
+      : edgeId === "none"
+        ? "no single edge"
+        : "";
+  if (json.verdict.discarded.a.drop !== json.verdict.discarded.b.drop) {
+    json.verdict.edge = "other side fell apart";
+  }
   return { json, status: 200 };
 }
 

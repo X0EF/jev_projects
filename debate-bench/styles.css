@@ -84,7 +84,8 @@ button:disabled { opacity: 0.5; cursor: wait; }
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
+  max-width: 22ch;
 }
 .seal-word {
   font-family: Fraunces, Georgia, serif;

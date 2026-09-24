@@ -30,15 +30,18 @@ function resources(source) {
   ].filter(Boolean).join(" · ");
 }
 
-function seal(kind, label) {
-  return `<div class="verdict ${kind}"><p class="seal" role="status"><span class="seal-kicker">Debate Bench</span><span class="seal-word">${label}</span></p></div>`;
+function seal(kind, label, edge) {
+  const kicker = edge
+    ? "Strongest edge · " + edge
+    : "Debate Bench";
+  return `<div class="verdict ${kind}"><p class="seal" role="status"><span class="seal-kicker">${escapeHtml(kicker)}</span><span class="seal-word">${label}</span></p></div>`;
 }
 
-function stampFor(winner) {
-  if (winner === "a") return seal("win-a", "Side A wins");
-  if (winner === "b") return seal("win-b", "Side B wins");
-  if (winner === "draw") return seal("draw", "Draw");
-  return seal("none", "No contest");
+function stampFor(winner, edge) {
+  if (winner === "a") return seal("win-a", "Side A wins", edge);
+  if (winner === "b") return seal("win-b", "Side B wins", edge);
+  if (winner === "draw") return seal("draw", "Draw", edge);
+  return seal("none", "No contest", edge);
 }
 
 function guardLine(letter, g) {
@@ -59,7 +62,7 @@ function renderDebate(payload) {
     </div>`;
   }).join("");
   const totals = v.totals || { a: 0, b: 0 };
-  return `${stampFor(v.winner)}
+  return `${stampFor(v.winner, v.edge)}
     ${guardLine("a", disc.a || {})}
     ${guardLine("b", disc.b || {})}
     <div class="row"><span>Weighted total A</span><span>${Number(totals.a).toFixed(2)} / 2</span></div>${bar(Number(totals.a) / 2)}
@@ -68,58 +71,53 @@ function renderDebate(payload) {
     <p class="meta">${resources(payload)}</p>`;
 }
 
+const DEFAULT_CRITERIA = [
+  "Evidence | 3 | Uses reasons you can check: a fact, example, or how something was made — not only 'because I like it'",
+  "Fairness | 2 | Deals with the other side instead of talking past them or insulting them",
+  "Clarity | 1 | Easy to follow",
+].join("\n");
 const SAMPLE_MS = 4000;
 const SAMPLES = {
   "debate-bench": [
     {
       a: "We should keep working from home. Our last quarter, support tickets closed 12% faster and people saved two hours a day on commuting. Nobody asked to come back five days a week.",
       b: "The office is better. Everyone knows you cannot really work in pajamas. My cousin's friend quit remote work, so remote work fails.",
-      criteria: "Evidence | 3 | Uses facts from this case, not slogans\nFairness | 2 | Answers the other side\nClarity | 1 | Easy to follow",
     },
     {
       a: "Add a protected bike lane on Main Street. Last year 14 people were hurt on that stretch. A similar lane on Oak Street cut injuries in half.",
       b: "Keep the parking. Shop owners say they need spots. We have not measured sales yet, but people will stop coming if they cannot park in front.",
-      criteria: "Evidence | 3 | Uses numbers or a local example\nTradeoffs | 2 | Names who loses and who gains\nClarity | 1 | Easy to follow",
     },
     {
       a: "Start school at 9am. Teen sleep studies show later starts raise attendance. Our own late-bus week last spring had fewer nurse visits.",
       b: "Keep the 7:30 start. Parents who work early need it. Later start is just kids being lazy.",
-      criteria: "Evidence | 3 | Backs the claim with a reason you can check\nFairness | 2 | Takes the other side seriously\nPracticality | 2 | Could a real school do this",
     },
     {
       a: "Sales rose 8% this quarter, from $2.0M to $2.16M. One new client was 1 point of that. The rest was repeat customers.",
       b: "Sales only look up because of one whale. Without them we would be flat. The dashboard still shows 8%, so the whale story is just an excuse.",
-      criteria: "Evidence | 3 | Matches the numbers given\nFairness | 2 | Does not ignore the other dataset\nClarity | 1 | Easy to follow",
     },
     {
       a: "Paper bags. They tear in the rain and we already reuse canvas. The city composts paper. Plastic lingers in the creek behind the store.",
       b: "Anyone who wants paper is a fool. Plastic is always better. I said so on Facebook.",
-      criteria: "Evidence | 3 | Grounded in a real cost or harm\nFairness | 1 | No insults in place of reasons\nClarity | 1 | Easy to follow",
     },
     {
       a: "Stream at home. Tickets are $18. A family of four saves about $50 and we can pause for kids.",
       b: "Theaters are magic. Opening weekend in a dark room is the point of movies. Streaming can wait a month.",
-      criteria: "Evidence | 2 | Names a real cost or experience\nValues | 2 | Says what they care about\nFairness | 1 | Lets the other side exist",
     },
     {
       a: "Put the extra $2M into buses. Night-shift workers miss the last bus at 8pm. Three employers wrote to the council about this.",
       b: "Fix potholes. The west-side stretch has 40 complaints this year. Buses do not help if cars cannot get to the park-and-ride.",
-      criteria: "Evidence | 3 | Uses a local fact\nWho is served | 2 | Names who benefits\nClarity | 1 | Easy to follow",
     },
     {
       a: "Phones cause rain. A blog said so. Every time I forget an umbrella it pours, so the science is settled.",
       b: "Rain comes from weather systems. Our city's wettest days last year lined up with storms on the radar, not with phone sales.",
-      criteria: "Evidence | 3 | Can be checked\nFairness | 1 | Stays on the question\nClarity | 1 | Easy to follow",
     },
     {
       a: "Cats. They use a box, they are fine alone during a long shift, and vet bills at our clinic averaged less than the dog visits last year.",
       b: "Dogs. They get you walking. Our block's evening group is all dog people. Cats just knock cups over.",
-      criteria: "Evidence | 2 | Uses a lived fact, not a meme\nFit | 2 | Matches a real daily life\nFairness | 1 | Does not smear the other pet",
     },
     {
       a: "Keep the library open Sundays. Last quarter Sunday visits were 1,200, mostly students. Closing saves one staff shift and loses that use.",
       b: "Close Sundays. Nobody reads anymore. My group chat thinks libraries are dead.",
-      criteria: "Evidence | 3 | Uses a count or a named group\nFairness | 2 | Answers the money vs use tradeoff\nClarity | 1 | Easy to follow",
     },
   ],
 };
@@ -136,17 +134,20 @@ function applySample(sample) {
   const list = SAMPLES["debate-bench"];
   let i = 0;
   let paused = false;
+  form.elements.namedItem("criteria").value = DEFAULT_CRITERIA;
   applySample(list[0]);
   const timer = setInterval(() => {
     if (paused) return;
     i = (i + 1) % list.length;
     applySample(list[i]);
   }, SAMPLE_MS);
-  form.addEventListener("input", () => {
+  form.addEventListener("input", (e) => {
+    if (e.target && e.target.name === "criteria") return;
     paused = true;
     clearInterval(timer);
   });
-  form.addEventListener("focusin", () => {
+  form.addEventListener("focusin", (e) => {
+    if (e.target && e.target.name === "criteria") return;
     paused = true;
   });
 })();
@@ -157,6 +158,7 @@ form.addEventListener("submit", async (e) => {
   btn.disabled = true;
   out.innerHTML = "<p class='meta'>Asking Jev…</p>";
   const data = Object.fromEntries(new FormData(form).entries());
+  if (!String(data.criteria || "").trim()) data.criteria = DEFAULT_CRITERIA;
   try {
     const res = await fetch("/api/judge", {
       method: "POST",
